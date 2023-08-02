@@ -50,6 +50,37 @@ var (
 	sonarQubeCoverageExclusions        = kingpin.Flag("sonarQubeCoverageExclusions", "The path for the code to be excluded on SonarQube Scan.").Envar("ESTAFETTE_EXTENSION_SONARQUBE_COVERAGE_EXCLUSIONS").String()
 )
 
+func cleanUpNuGetConfig(isDryRun bool) error {
+
+	rootPath := "."
+	fileName := "nuget.conf"
+
+	err := filepath.Walk(rootPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if strings.EqualFold(info.Name(), fileName) {
+			fmt.Println("WARNING: Found", fileName, "in", path)
+
+			if !isDryRun {
+				err := os.Remove(path)
+				if err != nil {
+					fmt.Println("Error deleting", fileName, ":", err)
+				} else {
+					fmt.Println(fileName, "deleted successfully")
+				}
+			} else {
+				fmt.Println("INFO: dry run, not deleting.", fileName, "in", path)
+			}
+		}
+
+		return nil
+	})
+
+	return err
+}
+
 func main() {
 
 	// parse command line parameters
@@ -95,6 +126,11 @@ func main() {
 			".nuget/packages", // This is needed so the packages are restored into the working directory, so they're not lost between the stages.
 		}
 
+		err := cleanUpNuGetConfig(true)
+		if err != nil {
+			log.Fatal().Err(err).Msg("error in cleanup of nuget.config")
+		}
+
 		if *nugetSources != "" {
 			nugetSourcesArray := strings.Split(*nugetSources, ",")
 
@@ -123,6 +159,11 @@ func main() {
 			"build",
 			"--configuration",
 			*configuration,
+		}
+
+		err := cleanUpNuGetConfig(true)
+		if err != nil {
+			log.Fatal().Err(err).Msg("error in cleanup of nuget.config")
 		}
 
 		if *buildVersion != "" {
