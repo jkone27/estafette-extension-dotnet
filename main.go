@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-
 	"github.com/alecthomas/kingpin"
 	foundation "github.com/estafette/estafette-foundation"
 	"github.com/rs/zerolog/log"
@@ -49,6 +48,25 @@ var (
 	sonarQubeServerName                = kingpin.Flag("sonarQubeServerName", "The name of the preferred SonarQube server from the preconfigured credentials.").Envar("ESTAFETTE_EXTENSION_SONARQUBE_SERVER_NAME").String()
 	sonarQubeCoverageExclusions        = kingpin.Flag("sonarQubeCoverageExclusions", "The path for the code to be excluded on SonarQube Scan.").Envar("ESTAFETTE_EXTENSION_SONARQUBE_COVERAGE_EXCLUSIONS").String()
 )
+
+func findFileDescriptorIgnoreCase(filename string) (*os.File, error) {
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		return nil, err
+	}
+
+	for _, entry := range entries {
+		if strings.EqualFold(entry.Name(), filename) {
+			file, err := os.Open(entry.Name())
+			if err != nil {
+				return nil, err
+			}
+			return file, nil
+		}
+	}
+
+	return nil, nil
+}
 
 func main() {
 
@@ -92,10 +110,16 @@ func main() {
 		// 2. If nugetServerURL and nugetServerAPIKey are explicitly specified, we generate a NuGet.config file using those.
 		// 2. If we have the default credentials from the server level, and nugetServerName is explicitly specified, we look for the credential with the specified name.
 		// 3. If we have the default credentials from the server level, and nugetServerName is not specified, we take the first credential. (This is the sensible default if we're using only one NuGet server.)
-		if foundation.FileExists("nuget.config") {
+		fileDesc, err := findFileDescriptorIgnoreCase("nuget.config")
+		if err != nil {
+			log.Fatalf("Error searching for file: %v", err)
+		}
+
+		if fileDesc != nil {
+			defer fileDesc.Close()
 			log.Printf("WARNING: NuGet.config was found in the repository, deleting it.\n")
 			log.Printf("The NuGet.config should be deleted from the repository, to make sure that only the common default sources are used.\n")
-			os.Remove("nuget.config")
+			os.Remove(fileDesc.Name())
 		}
 
 		if *nugetServerURL == "" || *nugetServerAPIKey == "" {
